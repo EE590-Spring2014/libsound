@@ -23,10 +23,8 @@ AudioTool::~AudioTool()
 	this->samplerate = 0;
 }
 
-Platform::Array<float>^ AudioTool::conform( const Platform::Array<float>^ data, unsigned int srcNumChannels, unsigned int srcSamplerate ) {
-	// Note, we don't actually conform samplerates here, as I don't have the patience to make a samplerate converter. :P
-
-	// Since we don't do anything with samplerate, if the channels are the same, just pass the original data back
+Platform::Array<float>^ AudioTool::convertChannels( const Platform::Array<float>^ data, unsigned int srcNumChannels ) {
+	// If the channels are the same, just pass the original data back
 	if( srcNumChannels == this->numChannels )
 		return *((Platform::Array<float>^ *) &data);	// I feel dirty just for writing this
 
@@ -41,7 +39,7 @@ Platform::Array<float>^ AudioTool::conform( const Platform::Array<float>^ data, 
 			}
 		}
 	}
-		
+
 	// Otherwise, if we're going from a multi-channel mix to a single-channel, just average everything together
 	if( this->numChannels == 1 ) {
 		for( unsigned int i=0; i<data->Length; ++i ) {
@@ -54,18 +52,35 @@ Platform::Array<float>^ AudioTool::conform( const Platform::Array<float>^ data, 
 	return newData;
 }
 
-/*
-void LibAudioTool::mixIn( Platform::Array<float>^ * data1, const Platform::Array<float>^ data2 ) {
-    // Don't do anything if we don't have matching lengths
-    if( data2->Length != data1->Length )
-        return;
+Platform::Array<float>^ AudioTool::calcStandardDeviation( const Platform::Array<float>^ data ) {
+    // Get pointer to data inside of C# array class
+    float * realData = data->Data;
+    float energy = 0.0f;
+    float mean = 0.0f;
 
-    // Sum data2 into outArray (which is just a dereferenced data1)
-    for( unsigned int i=0; i<data1->Length; ++i ) {
-        data1[i] += data2[i];
+    auto energy = ref new Platform::Array<float>(this->numChannels);
+    auto mean = ref new Platform::Array<float>(this->numChannels);
+
+    // Since we're using these in an inner loop, we want to deal with the data directly
+    float * e = energy->Data;
+    float * m = mean->Data;
+
+    for( unsigned int i=0;i<data->Length/this->numChannels; ++i ) {
+        for( unsigned int k=0;k<this->numChannels; ++k ) {
+            m[k] += realData[this->numChannels*i];
+            e[k] += realData[this->numChannels*i]*realData[this->numChannels*i];
+        }
     }
+
+    // Energy of IID process `x` is `E[x^2] - E[x]^2`, so subtract out the means now:
+    for( unsigned int k=0;k<this->numChannels; ++k )
+        e[k] -= m[k]*m[k]
+
+    // Finally, return the energy
+    return energy;
 }
-*/
+
+
 
 Platform::Array<float>^ AudioTool::randn( unsigned int numSamples ) {
 	// Buffer to store output data
@@ -73,8 +88,11 @@ Platform::Array<float>^ AudioTool::randn( unsigned int numSamples ) {
 
 	// Use stdlib's random number generation
 	std::default_random_engine generator;
+
+    // We ask for a normally distributed random variable with 0 mean, 1/4 stddev
 	std::normal_distribution<float> randn(0.0,.25);
 	for( unsigned int i=0; i<numSamples; ++i ) {
+        // We clip values greater or less than 1, on the off chance those occur
 		data[i] = max(min(randn(generator), 1.0f), -1.0f);
 	}
 
@@ -88,29 +106,19 @@ Platform::Array<float>^ AudioTool::silence( unsigned int numSamples ) {
 	return data;
 }
 
-Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float numOscillations ) {
-	return AudioTool::sin( numSamples, numOscillations, 0.0f );
+Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float freq ) {
+	return AudioTool::sin( numSamples, freq, 0.0f );
 }
 
-Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float numOscillations, float startingPhase  ) {
+Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float freq, float startingPhase  ) {
 	auto data = ref new Platform::Array<float>(this->numChannels*numSamples);
 	for( unsigned int i=0; i<numSamples; ++i ) {
-		data[this->numChannels*i+0] = .5f*sinf(2*3.1415926f*numOscillations*i/float(numSamples) + startingPhase);
+        // Generate the sin wave on the zeroeth channel
+		data[this->numChannels*i+0] = .5f*sinf(i*freq2*M_PI/(this->samplerate*numSamples) + startingPhase);
+
+        // Copy it onto all other channels, if they exist
 		for( unsigned int k=1; k<this->numChannels; ++k )
 			data[this->numChannels*i+k] = data[this->numChannels*i+0];
 	}
 	return data;
-}
-
-float AudioTool::calcEnergy( const Platform::Array<float>^ data ) {
-	float * realData = data->Data;
-	float energy = 0.0f;
-	float mean = 0.0f;
-	
-	for( unsigned int i=0;i<data->Length/this->numChannels; ++i ) {
-		 energy += realData[i]*realData[i];
-		 mean += realData[i];
-	}
-
-	return energy - mean*mean;
 }
