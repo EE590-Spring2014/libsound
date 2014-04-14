@@ -55,8 +55,6 @@ Platform::Array<float>^ AudioTool::convertChannels( const Platform::Array<float>
 Platform::Array<float>^ AudioTool::calcStandardDeviation( const Platform::Array<float>^ data ) {
     // Get pointer to data inside of C# array class
     float * realData = data->Data;
-    float energy = 0.0f;
-    float mean = 0.0f;
 
     auto energy = ref new Platform::Array<float>(this->numChannels);
     auto mean = ref new Platform::Array<float>(this->numChannels);
@@ -74,7 +72,7 @@ Platform::Array<float>^ AudioTool::calcStandardDeviation( const Platform::Array<
 
     // Energy of IID process `x` is `E[x^2] - E[x]^2`, so subtract out the means now:
     for( unsigned int k=0;k<this->numChannels; ++k )
-        e[k] -= m[k]*m[k]
+        e[k] -= m[k]*m[k];
 
     // Finally, return the energy
     return energy;
@@ -114,7 +112,7 @@ Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float freq, flo
 	auto data = ref new Platform::Array<float>(this->numChannels*numSamples);
 	for( unsigned int i=0; i<numSamples; ++i ) {
         // Generate the sin wave on the zeroeth channel
-		data[this->numChannels*i+0] = .5f*sinf(i*freq2*M_PI/(this->samplerate*numSamples) + startingPhase);
+		data[this->numChannels*i+0] = .5f*sinf(i*freq*2*M_PI/(this->samplerate*numSamples) + startingPhase);
 
         // Copy it onto all other channels, if they exist
 		for( unsigned int k=1; k<this->numChannels; ++k )
