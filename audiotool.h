@@ -22,7 +22,7 @@ namespace libsound
 
 		/////////////// SIMPLE BUFFER MANIPULATIONS ///////////////
 		// This converts a source buffer into something the output can handle (e.g. performs upmixing or downmixing if srcNumChannels != this->numChannels)
-		Platform::Array<float>^ convertChannels( const Platform::Array<float>^ data, unsigned int srcNumChannels, unsigned int srcSamplerate );
+		Platform::Array<float>^ convertChannels( const Platform::Array<float>^ data, unsigned int srcNumChannels );
 
 		// Finds the energy in a Platform::Array<float>^
         // Note: performs the analysis along each channel independently, returning an array of lenth numChannels
