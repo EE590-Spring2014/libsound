@@ -129,15 +129,11 @@ SoundIO::~SoundIO() {
 	this->stop();
 
 	// Clean up threads here
-	if( this->audioInThreadHandle != nullptr ) {
+	if( this->audioInThreadHandle != nullptr )
 		this->audioInThreadHandle->Cancel();
-		this->audioInThreadHandle->Close();
-	}
 
-	if( this->audioOutThreadHandle != nullptr ) {
+	if( this->audioOutThreadHandle != nullptr )
 		this->audioOutThreadHandle->Cancel();
-		this->audioOutThreadHandle->Close();
-	}
 }
 
 void SoundIO::start() {
@@ -268,7 +264,7 @@ Platform::Array<float>^ SoundIO::readAudio() {
 }
 
 void SoundIO::audioInThread( Windows::Foundation::IAsyncAction^ operation ) {
-	while( true ) {
+	while( operation->Status != AsyncStatus::Canceled ) {
 		if( WaitForSingleObjectEx( this->audioInReady, INFINITE, FALSE ) == WAIT_OBJECT_0 ) {
 			auto buffer = this->readAudio();
 
@@ -278,10 +274,11 @@ void SoundIO::audioInThread( Windows::Foundation::IAsyncAction^ operation ) {
 				audioInEvent( buffer );
 		}
 	}
+	operation->Close();
 }
 
 void SoundIO::audioOutThread( Windows::Foundation::IAsyncAction^ operation ) {
-	while( true ) {
+	while( operation->Status != AsyncStatus::Canceled ) {
 		if( WaitForSingleObjectEx( this->audioOutReady, INFINITE, FALSE ) == WAIT_OBJECT_0 ) {
 			auto buffer = audioOutEvent( outputBufferLen );
 
@@ -291,4 +288,5 @@ void SoundIO::audioOutThread( Windows::Foundation::IAsyncAction^ operation ) {
 				this->writeAudio( buffer );
 		}
 	}
+	operation->Close();
 }
