@@ -134,6 +134,14 @@ SoundIO::~SoundIO() {
 
 	if( this->audioOutThreadHandle != nullptr )
 		this->audioOutThreadHandle->Cancel();
+
+	while( this->audioInThreadHandle != nullptr ) {
+		WaitForSingleObjectEx(GetCurrentThread(), 1, FALSE);
+	}
+
+	while( this->audioInThreadHandle != nullptr ) {
+		WaitForSingleObjectEx(GetCurrentThread(), 1, FALSE);
+	}
 }
 
 void SoundIO::start() {
@@ -202,13 +210,14 @@ unsigned int SoundIO::writeAudio( const Platform::Array<float>^ data ) {
 	}
 
 	// Calculate how many samples to write
-	int numSamplesToWrite = min( (int)(this->outputBufferLen - padding), data->Length/outputFormat->nChannels );
-	if( (unsigned int)numSamplesToWrite < data->Length/outputFormat->nChannels ) {
+	int numSamplesToWrite = data->Length/outputFormat->nChannels;
+	int numSamplesCanWrite = min( (int)(this->outputBufferLen - padding), numSamplesToWrite );
+	if( numSamplesCanWrite < numSamplesToWrite ) {
 		OutputDebugString( L"Not writing buffer, as not enough space in output buffer!\n" );
 	}
 
 	// If we actually have space to write something, let's do it!
-	if( numSamplesToWrite > 0 ) {
+	if( numSamplesCanWrite >= numSamplesToWrite ) {
 		// Get the output buffer
 		void * outputBuff = NULL;
 		hr = outputClient->GetBuffer( numSamplesToWrite, (unsigned char **)&outputBuff );
@@ -223,10 +232,11 @@ unsigned int SoundIO::writeAudio( const Platform::Array<float>^ data ) {
 		// Release the buffer (this is important to do as quickly as possible,
 		// so the OS can start using the data in the buffer!)
 		outputClient->ReleaseBuffer( numSamplesToWrite, 0 );
+		return numSamplesToWrite;
 	}
 
 	// Return the number of samples we wrote, or 0 if we couldn't write any
-	return max( numSamplesToWrite, 0 );
+	return 0;
 }
 
 
@@ -238,7 +248,7 @@ Platform::Array<float>^ SoundIO::readAudio() {
 
 	HRESULT hr = inputClient->GetBuffer( &rawData, &numSamples, &flags, NULL, NULL );
 	if( FAILED(hr) ) {
-		OutputDebugString( L"Could not GetBuffer() for render client!" );
+		OutputDebugString( L"Could not GetBuffer() for capture client!" );
 	}
 
 	Platform::Array<float>^ data = nullptr;
@@ -266,6 +276,8 @@ Platform::Array<float>^ SoundIO::readAudio() {
 void SoundIO::audioInThread( Windows::Foundation::IAsyncAction^ operation ) {
 	while( operation->Status != AsyncStatus::Canceled ) {
 		if( WaitForSingleObjectEx( this->audioInReady, INFINITE, FALSE ) == WAIT_OBJECT_0 ) {
+			if( operation->Status == AsyncStatus::Canceled )
+				break;
 			auto buffer = this->readAudio();
 
 			// Sometimes the buffer can be NULL, because something failed inside of readAudio()
@@ -274,13 +286,16 @@ void SoundIO::audioInThread( Windows::Foundation::IAsyncAction^ operation ) {
 				audioInEvent( buffer );
 		}
 	}
-	operation->Close();
+	this->audioInThreadHandle->Close();
+	this->audioInThreadHandle = nullptr;
 }
 
 void SoundIO::audioOutThread( Windows::Foundation::IAsyncAction^ operation ) {
 	while( operation->Status != AsyncStatus::Canceled ) {
 		if( WaitForSingleObjectEx( this->audioOutReady, INFINITE, FALSE ) == WAIT_OBJECT_0 ) {
-			auto buffer = audioOutEvent( outputBufferLen );
+			if( operation->Status == AsyncStatus::Canceled )
+				break;
+			auto buffer = audioOutEvent( outputBufferLen/2 );
 
 			// Sometimes the buffer can be NULL, because something failed inside of audioOutEvent()
 			// Otherwise, trigger the event!
@@ -288,5 +303,6 @@ void SoundIO::audioOutThread( Windows::Foundation::IAsyncAction^ operation ) {
 				this->writeAudio( buffer );
 		}
 	}
-	operation->Close();
+	this->audioOutThreadHandle->Close();
+	this->audioOutThreadHandle = nullptr;
 }
