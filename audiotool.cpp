@@ -112,7 +112,7 @@ Platform::Array<float>^ AudioTool::sin( unsigned int numSamples, float freq, flo
 	auto data = ref new Platform::Array<float>(this->numChannels*numSamples);
 	for( unsigned int i=0; i<numSamples; ++i ) {
         // Generate the sin wave on the zeroeth channel
-		data[this->numChannels*i+0] = .5f*sinf(i*freq*2*M_PI/(this->samplerate*numSamples) + startingPhase);
+		data[this->numChannels*i+0] = .5f*sinf(i*freq*2*M_PI/this->samplerate + startingPhase);
 
         // Copy it onto all other channels, if they exist
 		for( unsigned int k=1; k<this->numChannels; ++k )
